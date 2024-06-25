@@ -3,20 +3,26 @@ import onnxruntime as ort
 
 import preprocess_image
 
-# 初始化ONNX Runtime运行时
-# model 文件在 https://github.com/onnx/models/tree/main/validated/vision/classification/resnet 下载
-ort_session = ort.InferenceSession("resnet50-v1-12-int8.onnx")
+with open('synset.txt', 'r') as f:
+    labels = [l.rstrip() for l in f]
 
-# 准备输入数据，例如一张图片，需要调整至模型期望的形状和类型
-image_path = "cat.png"
-image = preprocess_image.parse(image_path)  # 假设preprocess_image函数处理图像至(1, 3, 224, 224)的形状和合适的数值范围
-# print(image)
 
-# 运行模型推理
-outputs = ort_session.run(None, {ort_session.get_inputs()[0].name: image})
+def parse(image_path):
+    ort_session = ort.InferenceSession("resnet50-v2-7__mod.onnx")
+    image = preprocess_image.parse(image_path)
 
-# 输出预测结果
-predictions = outputs[0]  # 假设输出是一个数组，包含了每个类别的概率
-# print(outputs[0])
-predicted_class = np.argmax(predictions)
-print(f"Predicted class: {predicted_class}")
+    input_name = ort_session.get_inputs()[0].name
+    output_name = ort_session.get_outputs()[0].name
+    feature_layer_name = 'resnetv24_pool1_fwd' # 特征层的名称，model文件不同，名称不同
+    outputs = ort_session.run([output_name, feature_layer_name], {input_name: image})
+
+    # 输出预测结果
+    predictions = outputs[0]  # 假设输出是一个数组，包含了每个类别的概率
+    predictions = np.squeeze(predictions)
+    predicted_class = np.argsort(predictions)[::-1]
+    # print('class=%s ; probability=%f' % (labels[predicted_class[0]], predictions[predicted_class[0]]))
+
+    feature_vector = outputs[1].flatten()
+    image_class = labels[predicted_class[0]]
+    image_class_id = predictions[predicted_class[0]]
+    return image_class, image_class_id, feature_vector
